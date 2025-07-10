@@ -15,7 +15,7 @@ class SitePulseWP_Admin {
     private function __construct() {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_post_sitepulsewp_export', array( $this, 'export_csv' ) );
-
+        add_action( 'admin_post_sitepulsewp_rollback', array( $this, 'rollback_post' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
     }
 
@@ -81,7 +81,27 @@ class SitePulseWP_Admin {
         echo '<table class="widefat"><thead><tr><th>ID</th><th>Type</th><th>Details</th><th>Date</th></tr></thead><tbody>';
         if ( ! empty( $logs ) ) {
             foreach ( $logs as $log ) {
-                echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$log->event_details}</td><td>{$log->created_at}</td></tr>";
+                $details = $log->event_details;
+                $actions = '';
+                if ( $log->event_type === 'Post Updated' ) {
+                    $data = json_decode( $log->event_details, true );
+                    if ( $data ) {
+                        $details  = sprintf( 'Post ID: %d, User ID: %d, Old Title: %s, New Title: %s',
+                            isset( $data['post_id'] ) ? $data['post_id'] : 0,
+                            isset( $data['user_id'] ) ? $data['user_id'] : 0,
+                            isset( $data['old_title'] ) ? esc_html( $data['old_title'] ) : '',
+                            isset( $data['new_title'] ) ? esc_html( $data['new_title'] ) : ''
+                        );
+                        if ( ! empty( $data['diff'] ) ) {
+                            $details .= '<div class="sitepulsewp-diff">' . $data['diff'] . '</div>';
+                        }
+                        if ( isset( $data['prev_revision'], $data['post_id'] ) ) {
+                            $url = esc_url( admin_url( 'admin-post.php?action=sitepulsewp_rollback&log_id=' . $log->id ) );
+                            $actions = '<p><a class="button" href="' . $url . '">Rollback</a></p>';
+                        }
+                    }
+                }
+                echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$details}{$actions}</td><td>{$log->created_at}</td></tr>";
             }
         } else {
             echo '<tr><td colspan="4">No logs found.</td></tr>';
@@ -197,6 +217,47 @@ class SitePulseWP_Admin {
         submit_button();
         echo '</form>';
         echo '</div>';
+    }
+
+    /**
+     * Rollback a post to a previous revision based on a log entry.
+     */
+    public function rollback_post() {
+        if ( ! current_user_can( 'edit_posts' ) ) {
+            wp_die( 'No permission.' );
+        }
+
+        $log_id = isset( $_GET['log_id'] ) ? absint( $_GET['log_id'] ) : 0;
+        if ( ! $log_id ) {
+            wp_redirect( admin_url( 'admin.php?page=sitepulsewp' ) );
+            exit;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'sitepulsewp_logs';
+        $log   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $log_id ) );
+        if ( ! $log ) {
+            wp_redirect( admin_url( 'admin.php?page=sitepulsewp' ) );
+            exit;
+        }
+
+        $data = json_decode( $log->event_details, true );
+        if ( empty( $data['prev_revision'] ) || empty( $data['post_id'] ) ) {
+            wp_redirect( admin_url( 'admin.php?page=sitepulsewp' ) );
+            exit;
+        }
+
+        $revision_id = absint( $data['prev_revision'] );
+        $post_id     = absint( $data['post_id'] );
+
+        $restored = wp_restore_post_revision( $revision_id );
+
+        if ( $restored ) {
+            SitePulseWP_Logger::log( 'Post Rolled Back', wp_json_encode( [ 'post_id' => $post_id, 'revision_id' => $revision_id ] ) );
+        }
+
+        wp_redirect( admin_url( 'post.php?post=' . $post_id . '&action=edit' ) );
+        exit;
     }
 
 }

@@ -10,9 +10,10 @@ class SitePulseWP_Logger {
         $wpdb->insert(
             $table,
             array(
-                'event_type' => sanitize_text_field( $type ),
-                'event_details' => sanitize_textarea_field( $details ),
-                'created_at' => current_time( 'mysql' )
+                'event_type'   => sanitize_text_field( $type ),
+                // allow some html so diffs can be viewed nicely
+                'event_details' => wp_kses_post( $details ),
+                'created_at'   => current_time( 'mysql' )
             ),
             array( '%s', '%s', '%s' )
         );

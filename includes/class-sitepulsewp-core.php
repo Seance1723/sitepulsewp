@@ -42,15 +42,33 @@ class SitePulseWP_Core {
     public function log_post_save( $post_ID, $post, $update ) {
         if ( wp_is_post_revision( $post_ID ) ) return;
 
-        $type = $update ? 'Post Updated' : 'New Post';
-        $details = sprintf(
-            'Post ID: %d, Title: %s, Type: %s, Author ID: %d',
-            $post_ID,
-            $post->post_title,
-            $post->post_type,
-            $post->post_author
-        );
-        SitePulseWP_Logger::log( $type, $details );
+        if ( $update ) {
+            $revisions = wp_get_post_revisions( $post_ID );
+            $prev_revision = current( $revisions ); // latest revision is previous version
+
+            $details = array(
+                'post_id' => $post_ID,
+                'user_id' => get_current_user_id(),
+                'new_title' => $post->post_title,
+            );
+
+            if ( $prev_revision ) {
+                $old_post = get_post( $prev_revision );
+                $details['prev_revision'] = $prev_revision->ID;
+                $details['old_title'] = $old_post->post_title;
+                $details['diff'] = sitepulsewp_generate_diff( $old_post->post_content, $post->post_content );
+            }
+
+            SitePulseWP_Logger::log( 'Post Updated', wp_json_encode( $details ) );
+        } else {
+            $details = array(
+                'post_id' => $post_ID,
+                'title'   => $post->post_title,
+                'type'    => $post->post_type,
+                'user_id' => get_current_user_id(),
+            );
+            SitePulseWP_Logger::log( 'New Post', wp_json_encode( $details ) );
+        }
     }
 
     public function log_post_delete( $post_ID ) {
