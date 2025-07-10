@@ -4,6 +4,11 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class SitePulseWP_Cron {
 
     public static function init() {
+        $options = get_option( 'sitepulsewp_settings' );
+        if ( empty( $options['uptime_enabled'] ) ) {
+            return; // Uptime monitor disabled.
+        }
+
         add_action( 'wp', array( __CLASS__, 'setup_cron' ) );
         add_action( 'sitepulsewp_uptime_check', array( __CLASS__, 'run_uptime_check' ) );
     }
@@ -44,9 +49,4 @@ class SitePulseWP_Cron {
         }
     }
 
-}
-
-$options = get_option('sitepulsewp_settings');
-if ( empty( $options['uptime_enabled'] ) ) {
-    return; // Uptime monitor disabled.
 }

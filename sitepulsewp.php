@@ -48,5 +48,6 @@ function sitepulsewp_init() {
     if ( is_admin() ) {
         SitePulseWP_Admin::instance();
     }
+    SitePulseWP_Cron::init();
 }
 add_action( 'plugins_loaded', 'sitepulsewp_init' );
