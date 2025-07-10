@@ -1,0 +1,52 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+class SitePulseWP_Cron {
+
+    public static function init() {
+        add_action( 'wp', array( __CLASS__, 'setup_cron' ) );
+        add_action( 'sitepulsewp_uptime_check', array( __CLASS__, 'run_uptime_check' ) );
+    }
+
+    /**
+     * Schedule cron if not exists
+     */
+    public static function setup_cron() {
+        if ( ! wp_next_scheduled( 'sitepulsewp_uptime_check' ) ) {
+            wp_schedule_event( time(), 'five_minutes', 'sitepulsewp_uptime_check' );
+        }
+    }
+
+    
+
+    /**
+     * Perform site ping
+     */
+    public static function run_uptime_check() {
+        $url = home_url();
+        $start = microtime(true);
+        $response = wp_remote_get( $url, array( 'timeout' => 10 ) );
+        $end = microtime(true);
+
+        $response_time = round( ($end - $start) * 1000, 2 ); // ms
+
+        if ( is_wp_error( $response ) ) {
+            SitePulseWP_Logger::log( 'Uptime Check Failed', 'Error: ' . $response->get_error_message() );
+        } else {
+            $status = wp_remote_retrieve_response_code( $response );
+            $details = sprintf( 'URL: %s | HTTP Status: %d | Response Time: %sms', $url, $status, $response_time );
+
+            if ( $status != 200 ) {
+                SitePulseWP_Logger::log( 'Downtime Detected', $details );
+            } else {
+                SitePulseWP_Logger::log( 'Uptime OK', $details );
+            }
+        }
+    }
+
+}
+
+$options = get_option('sitepulsewp_settings');
+if ( empty( $options['uptime_enabled'] ) ) {
+    return; // Uptime monitor disabled.
+}
