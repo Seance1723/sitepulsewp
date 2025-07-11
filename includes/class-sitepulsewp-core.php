@@ -60,7 +60,7 @@ class SitePulseWP_Core {
                 $details['diff'] = sitepulsewp_generate_diff( $old_post->post_content, $post->post_content );
             }
 
-            SitePulseWP_Logger::log( 'Post Updated', wp_json_encode( $details ) );
+            SitePulseWP_Logger::log( 'Post Updated', wp_json_encode( $details ), get_current_user_id() );
         } else {
             $details = array(
                 'post_id' => $post_ID,
@@ -68,7 +68,7 @@ class SitePulseWP_Core {
                 'type'    => $post->post_type,
                 'user_id' => get_current_user_id(),
             );
-            SitePulseWP_Logger::log( 'New Post', wp_json_encode( $details ) );
+            SitePulseWP_Logger::log( 'New Post', wp_json_encode( $details ), get_current_user_id() );
         }
     }
 
@@ -83,20 +83,20 @@ class SitePulseWP_Core {
             $post->post_type,
             $post->post_author
         );
-        SitePulseWP_Logger::log( 'Post Deleted', $details );
+        SitePulseWP_Logger::log( 'Post Deleted', $details, get_current_user_id() );
     }
 
     /** --- User Actions --- */
     public function log_user_login( $user_login, $user ) {
         $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '';
         $details = sprintf( 'User ID: %d, Username: %s, IP: %s', $user->ID, $user_login, $ip );
-        SitePulseWP_Logger::log( 'User Login', $details );
+        SitePulseWP_Logger::log( 'User Login', $details, $user->ID );
     }
 
     public function log_login_failed( $username ) {
         $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '';
         $details = sprintf( 'Username: %s, IP: %s', $username, $ip );
-        SitePulseWP_Logger::log( 'Login Failed', $details );
+        SitePulseWP_Logger::log( 'Login Failed', $details, 0 );
     }
 
     public function log_user_logout() {
@@ -111,13 +111,13 @@ class SitePulseWP_Core {
         $user = get_userdata( $user_id );
         if ( $user ) {
             $details = sprintf( 'User ID: %d, Username: %s', $user->ID, $user->user_login );
-            SitePulseWP_Logger::log( 'Profile Updated', $details );
+            SitePulseWP_Logger::log( 'Profile Updated', $details, $user->ID );
         }
     }
 
     public function log_password_reset( $user ) {
         $details = sprintf( 'User ID: %d, Username: %s', $user->ID, $user->user_login );
-        SitePulseWP_Logger::log( 'Password Reset', $details );
+        SitePulseWP_Logger::log( 'Password Reset', $details, $user->ID );
     }
 
     public function log_comment_post( $comment_ID, $comment_approved, $commentdata ) {
@@ -128,7 +128,7 @@ class SitePulseWP_Core {
                 $commentdata['comment_post_ID'],
                 $commentdata['comment_author']
             );
-            SitePulseWP_Logger::log( 'New Comment', $details );
+            SitePulseWP_Logger::log( 'New Comment', $details, get_current_user_id() );
         }
     }
 
@@ -141,38 +141,38 @@ class SitePulseWP_Core {
                 $comment->comment_post_ID,
                 $comment->comment_author
             );
-            SitePulseWP_Logger::log( 'Comment Edited', $details );
+            SitePulseWP_Logger::log( 'Comment Edited', $details, get_current_user_id() );
         }
     }
 
     public function log_comment_delete( $comment_ID ) {
         $details = sprintf( 'Comment ID: %d', $comment_ID );
-        SitePulseWP_Logger::log( 'Comment Deleted', $details );
+        SitePulseWP_Logger::log( 'Comment Deleted', $details, get_current_user_id() );
     }
 
     /** --- Plugin & Theme Logs --- */
     public function log_plugin_activation( $plugin, $network_wide ) {
         $details = sprintf( 'Plugin Activated: %s', $plugin );
-        SitePulseWP_Logger::log( 'Plugin Activated', $details );
+        SitePulseWP_Logger::log( 'Plugin Activated', $details, get_current_user_id() );
     }
 
     public function log_plugin_deactivation( $plugin, $network_wide ) {
         $details = sprintf( 'Plugin Deactivated: %s', $plugin );
-        SitePulseWP_Logger::log( 'Plugin Deactivated', $details );
+        SitePulseWP_Logger::log( 'Plugin Deactivated', $details, get_current_user_id() );
     }
 
     public function log_plugin_update( $upgrader, $hook_extra ) {
         if ( isset( $hook_extra['action'] ) && $hook_extra['action'] === 'update' && isset( $hook_extra['type'] ) && $hook_extra['type'] === 'plugin' ) {
             if ( ! empty( $hook_extra['plugins'] ) ) {
                 $details = sprintf( 'Plugin(s) Updated: %s', implode( ', ', $hook_extra['plugins'] ) );
-                SitePulseWP_Logger::log( 'Plugin Updated', $details );
+                SitePulseWP_Logger::log( 'Plugin Updated', $details, get_current_user_id() );
             }
         }
     }
 
     public function log_theme_switch( $new_name, $new_theme ) {
         $details = sprintf( 'New Theme Activated: %s', $new_name );
-        SitePulseWP_Logger::log( 'Theme Switched', $details );
+        SitePulseWP_Logger::log( 'Theme Switched', $details, get_current_user_id() );
     }
 
     /** --- Media Monitor --- */
@@ -185,7 +185,7 @@ class SitePulseWP_Core {
                 $attachment->post_title,
                 $attachment->post_author
             );
-            SitePulseWP_Logger::log( 'New Media Added', $details );
+            SitePulseWP_Logger::log( 'New Media Added', $details, get_current_user_id() );
         }
     }
 
@@ -198,13 +198,13 @@ class SitePulseWP_Core {
                 $attachment->post_title,
                 $attachment->post_author
             );
-            SitePulseWP_Logger::log( 'Media Edited', $details );
+            SitePulseWP_Logger::log( 'Media Edited', $details, get_current_user_id() );
         }
     }
 
     public function log_media_delete( $post_ID ) {
         $details = sprintf( 'Attachment ID: %d', $post_ID );
-        SitePulseWP_Logger::log( 'Media Deleted', $details );
+        SitePulseWP_Logger::log( 'Media Deleted', $details, get_current_user_id() );
     }
 
 }

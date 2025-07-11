@@ -78,7 +78,7 @@ class SitePulseWP_Admin {
 
         echo '<p><a href="' . esc_url( admin_url( 'admin-post.php?action=sitepulsewp_export' ) ) . '" class="button button-primary">Export to CSV</a></p>';
 
-        echo '<table class="widefat"><thead><tr><th>ID</th><th>Type</th><th>Details</th><th>Date</th></tr></thead><tbody>';
+        echo '<table class="widefat"><thead><tr><th>ID</th><th>Type</th><th>User</th><th>Details</th><th>Date</th></tr></thead><tbody>';
         if ( ! empty( $logs ) ) {
             foreach ( $logs as $log ) {
                 $details = $log->event_details;
@@ -101,10 +101,19 @@ class SitePulseWP_Admin {
                         }
                     }
                 }
-                echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$details}{$actions}</td><td>{$log->created_at}</td></tr>";
+                $user_name = 'System';
+                if ( $log->user_id ) {
+                    $u = get_userdata( $log->user_id );
+                    if ( $u ) {
+                        $user_name = $u->user_login;
+                    }
+                }
+                $detail_toggle = '<button type="button" class="button sitepulsewp-toggle-details" data-target="spwp-' . $log->id . '">Show Details</button>';
+                $detail_div = '<div id="spwp-' . $log->id . '" class="sitepulsewp-details" style="display:none;">' . $details . $actions . '</div>';
+                echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$user_name}</td><td>{$detail_toggle}{$detail_div}</td><td>{$log->created_at}</td></tr>";
             }
         } else {
-            echo '<tr><td colspan="4">No logs found.</td></tr>';
+            echo '<tr><td colspan="5">No logs found.</td></tr>';
         }
         echo '</tbody></table>';
 
@@ -122,6 +131,15 @@ class SitePulseWP_Admin {
             echo '</div></div>';
         }
 
+        echo '<script type="text/javascript">\n';
+        echo 'jQuery(function($){\n';
+        echo '  $(".sitepulsewp-toggle-details").on("click", function(){\n';
+        echo '    var target = $("#" + $(this).data("target"));\n';
+        echo '    target.toggle();\n';
+        echo '    $(this).text(target.is(":visible") ? "Hide Details" : "Show Details");\n';
+        echo '  });\n';
+        echo '});\n';
+        echo '</script>';
         echo '</div>';
     }
 
@@ -138,10 +156,17 @@ class SitePulseWP_Admin {
         header( 'Content-Disposition: attachment; filename=sitepulsewp-logs.csv' );
 
         $output = fopen( 'php://output', 'w' );
-        fputcsv( $output, array( 'ID', 'Type', 'Details', 'Date' ) );
+        fputcsv( $output, array( 'ID', 'Type', 'User', 'Details', 'Date' ) );
 
         foreach ( $logs as $log ) {
-            fputcsv( $output, array( $log->id, $log->event_type, $log->event_details, $log->created_at ) );
+            $user_name = '';
+            if ( $log->user_id ) {
+                $u = get_userdata( $log->user_id );
+                if ( $u ) {
+                    $user_name = $u->user_login;
+                }
+            }
+            fputcsv( $output, array( $log->id, $log->event_type, $user_name, $log->event_details, $log->created_at ) );
         }
         fclose( $output );
         exit;
@@ -253,7 +278,7 @@ class SitePulseWP_Admin {
         $restored = wp_restore_post_revision( $revision_id );
 
         if ( $restored ) {
-            SitePulseWP_Logger::log( 'Post Rolled Back', wp_json_encode( [ 'post_id' => $post_id, 'revision_id' => $revision_id ] ) );
+            SitePulseWP_Logger::log( 'Post Rolled Back', wp_json_encode( [ 'post_id' => $post_id, 'revision_id' => $revision_id ] ), get_current_user_id() );
         }
 
         wp_redirect( admin_url( 'post.php?post=' . $post_id . '&action=edit' ) );

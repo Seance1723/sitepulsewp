@@ -36,15 +36,15 @@ class SitePulseWP_Cron {
         $response_time = round( ($end - $start) * 1000, 2 ); // ms
 
         if ( is_wp_error( $response ) ) {
-            SitePulseWP_Logger::log( 'Uptime Check Failed', 'Error: ' . $response->get_error_message() );
+            SitePulseWP_Logger::log( 'Uptime Check Failed', 'Error: ' . $response->get_error_message(), 0 );
         } else {
             $status = wp_remote_retrieve_response_code( $response );
             $details = sprintf( 'URL: %s | HTTP Status: %d | Response Time: %sms', $url, $status, $response_time );
 
             if ( $status != 200 ) {
-                SitePulseWP_Logger::log( 'Downtime Detected', $details );
+                SitePulseWP_Logger::log( 'Downtime Detected', $details, 0 );
             } else {
-                SitePulseWP_Logger::log( 'Uptime OK', $details );
+                SitePulseWP_Logger::log( 'Uptime OK', $details, 0 );
             }
         }
     }
