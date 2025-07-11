@@ -16,6 +16,7 @@ class SitePulseWP_Admin {
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_post_sitepulsewp_export', array( $this, 'export_csv' ) );
         add_action( 'admin_post_sitepulsewp_rollback', array( $this, 'rollback_post' ) );
+        add_action( 'admin_post_sitepulsewp_export_month', array( $this, 'export_month_csv' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
     }
@@ -25,14 +26,32 @@ class SitePulseWP_Admin {
             'SitePulseWP',
             'SitePulseWP',
             'manage_options',
-            'sitepulsewp',
-            array( $this, 'admin_page' ),
+            'sitepulsewp-dashboard',
+            array( $this, 'dashboard_page' ),
             'dashicons-chart-area'
         );
 
         add_submenu_page(
-            'sitepulsewp',
-            'SitePulseWP Settings',
+            'sitepulsewp-dashboard',
+            'Dashboard',
+            'Dashboard',
+            'manage_options',
+            'sitepulsewp-dashboard',
+            array( $this, 'dashboard_page' )
+        );
+
+        add_submenu_page(
+            'sitepulsewp-dashboard',
+            'Activity Log',
+            'Activity Log',
+            'manage_options',
+            'sitepulsewp-activity-log',
+            array( $this, 'activity_log_page' )
+        );
+
+        add_submenu_page(
+            'sitepulsewp-dashboard',
+            'Settings',
             'Settings',
             'manage_options',
             'sitepulsewp-settings',
@@ -44,24 +63,52 @@ class SitePulseWP_Admin {
      * Enqueue admin scripts.
      */
     public function enqueue_scripts( $hook ) {
-        if ( 'toplevel_page_sitepulsewp' !== $hook ) {
-            return;
+        if ( 'sitepulsewp_page_sitepulsewp-activity-log' === $hook ) {
+            wp_enqueue_script( 'jquery' );
+            wp_enqueue_script( 'thickbox' );
+            wp_enqueue_style( 'thickbox' );
         }
 
-        wp_enqueue_script( 'jquery' );
-        $script = <<<'JS'
-        jQuery(function($){
-            $( '.sitepulsewp-toggle-details' ).on('click', function(){
-                var target = $('#' + $(this).data('target'));
-                target.toggle();
-                $(this).text(target.is(':visible') ? 'Hide Details' : 'Show Details');
-            });
-        });
-        JS;
-        wp_add_inline_script( 'jquery', $script );
+        if ( 'toplevel_page_sitepulsewp-dashboard' === $hook ) {
+            wp_enqueue_script( 'chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', array(), null );
+        }
     }
 
-    public function admin_page() {
+    public function dashboard_page() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'sitepulsewp_logs';
+        $start = date( 'Y-m-01 00:00:00' );
+        $logs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE created_at >= %s AND event_type IN ('Uptime OK','Downtime Detected') ORDER BY created_at ASC", $start ) );
+
+        $data = array();
+        foreach ( $logs as $log ) {
+            $time = mysql2date( 'Y-m-d H:i', $log->created_at );
+            $rt = null;
+            if ( preg_match( '/Response Time:\s*(\d+(?:\.\d+)?)ms/', $log->event_details, $m ) ) {
+                $rt = (float) $m[1];
+            }
+            $data[] = array( 'time' => $time, 'response' => $rt, 'type' => $log->event_type );
+        }
+
+        echo '<div class="wrap">';
+        echo '<h1>SitePulseWP Dashboard</h1>';
+        echo '<p><a href="' . esc_url( admin_url( 'admin-post.php?action=sitepulsewp_export_month' ) ) . '" class="button button-primary">Export Current Month</a></p>';
+        echo '<canvas id="spwp-chart" height="100"></canvas>';
+        echo '<script type="text/javascript">var spwpData=' . wp_json_encode( $data ) . ';</script>';
+        echo '<script type="text/javascript">\n';
+        echo 'jQuery(function($){';
+        echo 'if(window.Chart){';
+        echo 'var labels = spwpData.map(function(d){return d.time});';
+        echo 'var data = spwpData.map(function(d){return d.response===null?0:d.response});';
+        echo 'var ctx = document.getElementById("spwp-chart").getContext("2d");';
+        echo 'new Chart(ctx,{type:"line",data:{labels:labels,datasets:[{label:"Response Time (ms)",data:data,fill:false,borderColor:"#0073aa"}]},options:{scales:{y:{beginAtZero:true}}}});';
+        echo '}';
+        echo '});';
+        echo '</script>';
+        echo '</div>';
+    }
+
+    public function activity_log_page() {
         global $wpdb;
         $table = $wpdb->prefix . 'sitepulsewp_logs';
 
@@ -84,7 +131,7 @@ class SitePulseWP_Admin {
         echo '<h1>SitePulseWP Logs</h1>';
 
         echo '<form method="get">';
-        echo '<input type="hidden" name="page" value="sitepulsewp">';
+        echo '<input type="hidden" name="page" value="sitepulsewp-activity-log">';
         echo '<select name="event_type">';
         echo '<option value="">All Types</option>';
         foreach ( $event_types as $type ) {
@@ -130,9 +177,9 @@ class SitePulseWP_Admin {
                         $user_name = $u->user_login;
                     }
                 }
-                $detail_toggle = '<button type="button" class="button sitepulsewp-toggle-details" data-target="spwp-' . $log->id . '">Show Details</button>';
-                $detail_div = '<div id="spwp-' . $log->id . '" class="sitepulsewp-details" style="display:none;">' . $details . $actions . '</div>';
-                echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$user_name}</td><td>{$detail_toggle}{$detail_div}</td><td>{$log->created_at}</td></tr>";
+                $link = '<a href="#TB_inline?width=600&height=550&inlineId=spwp-' . $log->id . '" class="thickbox">View</a>';
+                $detail_div = '<div id="spwp-' . $log->id . '" style="display:none;">' . $details . $actions . '</div>';
+                echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$user_name}</td><td>{$link}{$detail_div}</td><td>{$log->created_at}</td></tr>";
             }
         } else {
             echo '<tr><td colspan="5">No logs found.</td></tr>';
@@ -184,6 +231,30 @@ class SitePulseWP_Admin {
         fclose( $output );
         exit;
     }
+
+    public function export_month_csv() {
+        if ( ! current_user_can('manage_options') ) {
+            wp_die('No permission.');
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'sitepulsewp_logs';
+        $start = date( 'Y-m-01 00:00:00' );
+        $logs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE created_at >= %s AND event_type IN ('Uptime OK','Downtime Detected') ORDER BY created_at ASC", $start ) );
+
+        header( 'Content-Type: text/csv' );
+        header( 'Content-Disposition: attachment; filename=sitepulsewp-monitor-'.date('Y-m').'.csv' );
+
+        $output = fopen( 'php://output', 'w' );
+        fputcsv( $output, array( 'ID', 'Type', 'Details', 'Date' ) );
+
+        foreach ( $logs as $log ) {
+            fputcsv( $output, array( $log->id, $log->event_type, $log->event_details, $log->created_at ) );
+        }
+        fclose( $output );
+        exit;
+    }
+
 
     public function register_settings() {
         register_setting( 'sitepulsewp_settings_group', 'sitepulsewp_settings' );
@@ -267,7 +338,7 @@ class SitePulseWP_Admin {
 
         $log_id = isset( $_GET['log_id'] ) ? absint( $_GET['log_id'] ) : 0;
         if ( ! $log_id ) {
-            wp_redirect( admin_url( 'admin.php?page=sitepulsewp' ) );
+            wp_redirect( admin_url( 'admin.php?page=sitepulsewp-activity-log' ) );
             exit;
         }
 
@@ -275,13 +346,13 @@ class SitePulseWP_Admin {
         $table = $wpdb->prefix . 'sitepulsewp_logs';
         $log   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $log_id ) );
         if ( ! $log ) {
-            wp_redirect( admin_url( 'admin.php?page=sitepulsewp' ) );
+            wp_redirect( admin_url( 'admin.php?page=sitepulsewp-activity-log' ) );
             exit;
         }
 
         $data = json_decode( $log->event_details, true );
         if ( empty( $data['prev_revision'] ) || empty( $data['post_id'] ) ) {
-            wp_redirect( admin_url( 'admin.php?page=sitepulsewp' ) );
+            wp_redirect( admin_url( 'admin.php?page=sitepulsewp-activity-log' ) );
             exit;
         }
 
