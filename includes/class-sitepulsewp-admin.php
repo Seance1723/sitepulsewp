@@ -81,14 +81,29 @@ class SitePulseWP_Admin {
         $logs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE created_at >= %s AND event_type IN ('Uptime OK','Downtime Detected') ORDER BY created_at ASC", $start ) );
 
         $data = array();
+        $up = 0;
+        $down = 0;
+        $total_rt = 0;
+        $rt_samples = 0;
         foreach ( $logs as $log ) {
             $time = mysql2date( 'Y-m-d H:i', $log->created_at );
             $rt = null;
             if ( preg_match( '/Response Time:\s*(\d+(?:\.\d+)?)ms/', $log->event_details, $m ) ) {
                 $rt = (float) $m[1];
+                $total_rt += $rt;
+                $rt_samples++;
+            }
+            if ( $log->event_type === 'Uptime OK' ) {
+                $up++;
+            } elseif ( $log->event_type === 'Downtime Detected' ) {
+                $down++;
             }
             $data[] = array( 'time' => $time, 'response' => $rt, 'type' => $log->event_type );
         }
+
+        $uptime_percent = ( $up + $down ) > 0 ? round( $up / ( $up + $down ) * 100, 1 ) : null;
+        $avg_response  = $rt_samples > 0 ? round( $total_rt / $rt_samples, 2 ) : null;
+        $failed_logins = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $table WHERE event_type = 'Login Failed' AND created_at >= %s", $start ) );
 
         echo '<div class="wrap">';
         echo '<h1>SitePulseWP Dashboard</h1>';
@@ -100,6 +115,13 @@ class SitePulseWP_Admin {
         echo '<label>To <input type="date" name="end" /></label> ';
         submit_button( 'Download Report', 'secondary', 'submit', false );
         echo '</form>';
+        echo '<style>.spwp-kpis{display:flex;gap:20px;margin-bottom:20px}.spwp-kpi{flex:1;padding:10px;border:1px solid #ccd0d4;background:#fff;border-radius:4px;text-align:center}.spwp-kpi h2{margin-top:0;font-size:16px}.spwp-kpi .value{font-size:24px;font-weight:700}</style>';
+        echo '<div class="spwp-kpis">';
+        echo '<div class="spwp-kpi"><h2>Uptime %</h2><div class="value">' . ( $uptime_percent !== null ? esc_html( $uptime_percent ) : '&mdash;' ) . '</div></div>';
+        echo '<div class="spwp-kpi"><h2>Downtime Events</h2><div class="value">' . ( $down ? esc_html( $down ) : '&mdash;' ) . '</div></div>';
+        echo '<div class="spwp-kpi"><h2>Avg Response (ms)</h2><div class="value">' . ( $avg_response !== null ? esc_html( $avg_response ) : '&mdash;' ) . '</div></div>';
+        echo '<div class="spwp-kpi"><h2>Failed Logins</h2><div class="value">' . ( $failed_logins ? esc_html( $failed_logins ) : '&mdash;' ) . '</div></div>';
+        echo '</div>';
         echo '<canvas id="spwp-chart" height="100"></canvas>';
         echo '<script type="text/javascript">var spwpData=' . wp_json_encode( $data ) . ';</script>';
         echo '<script type="text/javascript">\n';

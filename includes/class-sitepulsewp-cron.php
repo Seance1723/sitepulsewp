@@ -12,6 +12,7 @@ class SitePulseWP_Cron {
         add_action( 'wp', array( __CLASS__, 'setup_cron' ) );
         add_action( 'sitepulsewp_uptime_check', array( __CLASS__, 'run_uptime_check' ) );
         add_action( 'sitepulsewp_monitor_check', array( __CLASS__, 'run_monitor_checks' ) );
+        add_action( 'sitepulsewp_security_summary', array( 'SitePulseWP_Security', 'daily_summary' ) );
     }
 
     /**
@@ -23,6 +24,9 @@ class SitePulseWP_Cron {
         }
         if ( ! wp_next_scheduled( 'sitepulsewp_monitor_check' ) ) {
             wp_schedule_event( time(), 'daily', 'sitepulsewp_monitor_check' );
+        }
+        if ( ! wp_next_scheduled( 'sitepulsewp_security_summary' ) ) {
+            wp_schedule_event( time(), 'daily', 'sitepulsewp_security_summary' );
         }
     }
 

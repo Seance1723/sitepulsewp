@@ -19,7 +19,6 @@ class SitePulseWP_Core {
 
         // Module 4 — User Actions
         add_action( 'wp_login', array( $this, 'log_user_login' ), 10, 2 );
-        add_action( 'wp_login_failed', array( $this, 'log_login_failed' ) );
         add_action( 'wp_logout', array( $this, 'log_user_logout' ) );
         add_action( 'profile_update', array( $this, 'log_profile_update' ) );
         add_action( 'after_password_reset', array( $this, 'log_password_reset' ) );
@@ -91,12 +90,6 @@ class SitePulseWP_Core {
         $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '';
         $details = sprintf( 'User ID: %d, Username: %s, IP: %s', $user->ID, $user_login, $ip );
         SitePulseWP_Logger::log( 'User Login', $details, $user->ID );
-    }
-
-    public function log_login_failed( $username ) {
-        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '';
-        $details = sprintf( 'Username: %s, IP: %s', $username, $ip );
-        SitePulseWP_Logger::log( 'Login Failed', $details, 0 );
     }
 
     public function log_user_logout() {
