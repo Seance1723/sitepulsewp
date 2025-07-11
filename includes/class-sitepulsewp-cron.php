@@ -11,6 +11,7 @@ class SitePulseWP_Cron {
 
         add_action( 'wp', array( __CLASS__, 'setup_cron' ) );
         add_action( 'sitepulsewp_uptime_check', array( __CLASS__, 'run_uptime_check' ) );
+        add_action( 'sitepulsewp_monitor_check', array( __CLASS__, 'run_monitor_checks' ) );
     }
 
     /**
@@ -19,6 +20,9 @@ class SitePulseWP_Cron {
     public static function setup_cron() {
         if ( ! wp_next_scheduled( 'sitepulsewp_uptime_check' ) ) {
             wp_schedule_event( time(), 'five_minutes', 'sitepulsewp_uptime_check' );
+        }
+        if ( ! wp_next_scheduled( 'sitepulsewp_monitor_check' ) ) {
+            wp_schedule_event( time(), 'daily', 'sitepulsewp_monitor_check' );
         }
     }
 
@@ -47,6 +51,10 @@ class SitePulseWP_Cron {
                 SitePulseWP_Logger::log( 'Uptime OK', $details, 0 );
             }
         }
+    }
+
+    public static function run_monitor_checks() {
+        SitePulseWP_Monitor::run_checks();
     }
 
 }

@@ -17,6 +17,7 @@ class SitePulseWP_Admin {
         add_action( 'admin_post_sitepulsewp_export', array( $this, 'export_csv' ) );
         add_action( 'admin_post_sitepulsewp_rollback', array( $this, 'rollback_post' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
     }
 
     public function add_admin_menu() {
@@ -37,6 +38,27 @@ class SitePulseWP_Admin {
             'sitepulsewp-settings',
             array( $this, 'settings_page' )
         );
+    }
+
+    /**
+     * Enqueue admin scripts.
+     */
+    public function enqueue_scripts( $hook ) {
+        if ( 'toplevel_page_sitepulsewp' !== $hook ) {
+            return;
+        }
+
+        wp_enqueue_script( 'jquery' );
+        $script = <<<'JS'
+        jQuery(function($){
+            $( '.sitepulsewp-toggle-details' ).on('click', function(){
+                var target = $('#' + $(this).data('target'));
+                target.toggle();
+                $(this).text(target.is(':visible') ? 'Hide Details' : 'Show Details');
+            });
+        });
+        JS;
+        wp_add_inline_script( 'jquery', $script );
     }
 
     public function admin_page() {
@@ -130,16 +152,7 @@ class SitePulseWP_Admin {
             ) );
             echo '</div></div>';
         }
-
-        echo '<script type="text/javascript">\n';
-        echo 'jQuery(function($){\n';
-        echo '  $(".sitepulsewp-toggle-details").on("click", function(){\n';
-        echo '    var target = $("#" + $(this).data("target"));\n';
-        echo '    target.toggle();\n';
-        echo '    $(this).text(target.is(":visible") ? "Hide Details" : "Show Details");\n';
-        echo '  });\n';
-        echo '});\n';
-        echo '</script>';
+        
         echo '</div>';
     }
 
