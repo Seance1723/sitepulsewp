@@ -18,5 +18,15 @@ class SitePulseWP_Activator {
 
         require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
         dbDelta( $sql );
+
+        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '';
+        SitePulseWP_Logger::log( 'Plugin Activated', 'SitePulseWP plugin activated from IP: ' . $ip );
+    }
+
+    public static function deactivate() {
+        wp_clear_scheduled_hook( 'sitepulsewp_uptime_check' );
+
+        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '';
+        SitePulseWP_Logger::log( 'Plugin Deactivated', 'SitePulseWP plugin deactivated from IP: ' . $ip );
     }
 }

@@ -2,14 +2,14 @@
 /**
  * Plugin Name: SitePulseWP
  * Description: Monitors uptime/downtime, content changes, and plugin/theme logs for your WordPress site.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Your Name
  * Text Domain: sitepulsewp
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'SITEPULSEWP_VERSION', '1.0.0' );
+define( 'SITEPULSEWP_VERSION', '1.0.1' );
 define( 'SITEPULSEWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SITEPULSEWP_URL', plugin_dir_url( __FILE__ ) );
 
@@ -38,9 +38,7 @@ add_filter( 'cron_schedules', function( $schedules ) {
     return $schedules;
 } );
 
-register_deactivation_hook( __FILE__, function() {
-    wp_clear_scheduled_hook( 'sitepulsewp_uptime_check' );
-});
+register_deactivation_hook( __FILE__, array( 'SitePulseWP_Activator', 'deactivate' ) );
 
 
 function sitepulsewp_init() {
