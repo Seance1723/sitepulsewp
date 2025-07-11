@@ -63,13 +63,13 @@ class SitePulseWP_Admin {
      * Enqueue admin scripts.
      */
     public function enqueue_scripts( $hook ) {
-        if ( 'sitepulsewp_page_sitepulsewp-activity-log' === $hook ) {
+        if ( false !== strpos( $hook, 'sitepulsewp-activity-log' ) ) {
             wp_enqueue_script( 'jquery' );
             wp_enqueue_script( 'thickbox' );
             wp_enqueue_style( 'thickbox' );
         }
 
-        if ( 'toplevel_page_sitepulsewp-dashboard' === $hook ) {
+        if ( false !== strpos( $hook, 'sitepulsewp-dashboard' ) ) {
             wp_enqueue_script( 'chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', array(), null );
         }
     }
@@ -92,7 +92,14 @@ class SitePulseWP_Admin {
 
         echo '<div class="wrap">';
         echo '<h1>SitePulseWP Dashboard</h1>';
-        echo '<p><a href="' . esc_url( admin_url( 'admin-post.php?action=sitepulsewp_export_month' ) ) . '" class="button button-primary">Export Current Month</a></p>';
+        echo '<form method="get" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="margin-bottom:15px;">';
+        echo '<input type="hidden" name="action" value="sitepulsewp_export_month" />';
+        echo '<label>Month <input type="month" name="month" /></label> ';
+        echo '<span style="margin:0 10px;">or</span>';
+        echo '<label>From <input type="date" name="start" /></label> ';
+        echo '<label>To <input type="date" name="end" /></label> ';
+        submit_button( 'Download Report', 'secondary', 'submit', false );
+        echo '</form>';
         echo '<canvas id="spwp-chart" height="100"></canvas>';
         echo '<script type="text/javascript">var spwpData=' . wp_json_encode( $data ) . ';</script>';
         echo '<script type="text/javascript">\n';
@@ -239,11 +246,29 @@ class SitePulseWP_Admin {
 
         global $wpdb;
         $table = $wpdb->prefix . 'sitepulsewp_logs';
-        $start = date( 'Y-m-01 00:00:00' );
-        $logs = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE created_at >= %s AND event_type IN ('Uptime OK','Downtime Detected') ORDER BY created_at ASC", $start ) );
+        $month = isset( $_GET['month'] ) ? sanitize_text_field( $_GET['month'] ) : '';
+        $start = isset( $_GET['start'] ) ? sanitize_text_field( $_GET['start'] ) : '';
+        $end   = isset( $_GET['end'] ) ? sanitize_text_field( $_GET['end'] ) : '';
+
+        if ( $month && preg_match( '/^\d{4}-\d{2}$/', $month ) ) {
+            $start_date = date( 'Y-m-01 00:00:00', strtotime( $month ) );
+            $end_date   = date( 'Y-m-t 23:59:59', strtotime( $month ) );
+        } else {
+            $start_date = $start ? date( 'Y-m-d 00:00:00', strtotime( $start ) ) : date( 'Y-m-01 00:00:00' );
+            $end_date   = $end ? date( 'Y-m-d 23:59:59', strtotime( $end ) ) : current_time( 'mysql' );
+        }
+
+        $logs = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table WHERE created_at >= %s AND created_at <= %s AND event_type IN ('Uptime OK','Downtime Detected') ORDER BY created_at ASC",
+                $start_date,
+                $end_date
+            )
+        );
 
         header( 'Content-Type: text/csv' );
-        header( 'Content-Disposition: attachment; filename=sitepulsewp-monitor-'.date('Y-m').'.csv' );
+        $filename = 'sitepulsewp-monitor-' . date( 'Ymd', strtotime( $start_date ) ) . '_to_' . date( 'Ymd', strtotime( $end_date ) ) . '.csv';
+        header( 'Content-Disposition: attachment; filename=' . $filename );
 
         $output = fopen( 'php://output', 'w' );
         fputcsv( $output, array( 'ID', 'Type', 'Details', 'Date' ) );
