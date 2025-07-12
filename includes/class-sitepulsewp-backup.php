@@ -79,6 +79,11 @@ class SitePulseWP_Backup {
         $filename = $domain . '_' . date( 'Ymd-His' ) . '.zip';
         $filepath = trailingslashit( $backup_dir ) . $filename;
 
+        if ( ! class_exists( 'ZipArchive' ) ) {
+            SitePulseWP_Logger::log( 'Backup Failed', 'ZipArchive not available', get_current_user_id() );
+            return;
+        }
+
         $zip = new ZipArchive();
         if ( $zip->open( $filepath, ZipArchive::CREATE ) === true ) {
             $sql = self::generate_db_dump();
@@ -161,6 +166,10 @@ class SitePulseWP_Backup {
             return false;
         }
 
+        if ( ! class_exists( 'ZipArchive' ) ) {
+            return false;
+        }
+        
         $zip = new ZipArchive();
         if ( $zip->open( $path ) !== true ) {
             return false;

@@ -148,6 +148,9 @@ class SitePulseWP_Admin {
         echo '});';
         echo '</script>';
         echo '</div>';
+        echo '<style>.spwp-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100000;}';
+        echo '.spwp-modal{background:#fff;padding:20px;max-width:600px;max-height:80%;overflow:auto;box-shadow:0 0 10px #000;}</style>';
+        echo '<script type="text/javascript">jQuery(function($){$(".spwp-view").on("click",function(e){e.preventDefault();var t=$(this).data("target"),c=$(t).html();var o=$("<div class=\"spwp-modal-overlay\"></div>").appendTo("body");$("<div class=\"spwp-modal\"></div>").html(c).appendTo(o);o.on("click",function(){o.remove();});});});</script>';
     }
 
     public function activity_log_page() {
@@ -219,8 +222,8 @@ class SitePulseWP_Admin {
                         $user_name = $u->user_login;
                     }
                 }
-                $link = '<a href="#TB_inline?width=600&height=550&inlineId=spwp-' . $log->id . '" class="thickbox">View</a>';
-                $detail_div = '<div id="spwp-' . $log->id . '" style="display:none;">' . $details . $actions . '</div>';
+                $link = '<a href="#" class="spwp-view" data-target="#spwp-' . $log->id . '">View</a>';
+                $detail_div = '<div id="spwp-' . $log->id . '" class="spwp-detail" style="display:none;">' . $details . $actions . '</div>';
                 echo "<tr><td>{$log->id}</td><td>{$log->event_type}</td><td>{$user_name}</td><td>{$link}{$detail_div}</td><td>{$log->created_at}</td></tr>";
             }
         } else {
@@ -433,6 +436,9 @@ class SitePulseWP_Admin {
     public function backups_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( 'No permission.' );
+        }
+        if ( ! class_exists( 'ZipArchive' ) ) {
+            echo '<div class="notice notice-error"><p>PHP ZipArchive extension is required for backups.</p></div>';
         }
         $files = SitePulseWP_Backup::list_backups();
         echo '<div class="wrap">';
