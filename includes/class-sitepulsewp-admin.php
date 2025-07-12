@@ -19,6 +19,8 @@ class SitePulseWP_Admin {
         add_action( 'admin_post_sitepulsewp_export_month', array( $this, 'export_month_csv' ) );
         add_action( 'admin_post_sitepulsewp_delete_backup', array( $this, 'delete_backup' ) );
         add_action( 'admin_post_sitepulsewp_restore_backup', array( $this, 'restore_backup' ) );
+        add_action( 'admin_post_sitepulsewp_backup_now', array( $this, 'backup_now' ) );
+        add_action( 'admin_post_sitepulsewp_download_backup', array( $this, 'download_backup' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
     }
@@ -363,6 +365,14 @@ class SitePulseWP_Admin {
             'sitepulsewp-settings',
             'sitepulsewp_main_section'
         );
+
+        add_settings_field(
+            'backup_day',
+            'Backup Day',
+            array( $this, 'backup_day_field' ),
+            'sitepulsewp-settings',
+            'sitepulsewp_main_section'
+        );
     }
 
     public function uptime_enabled_field() {
@@ -403,6 +413,12 @@ class SitePulseWP_Admin {
         echo '<input type="time" name="sitepulsewp_settings[backup_time]" value="' . $time . '" />';
     }
 
+    public function backup_day_field() {
+        $options = get_option( 'sitepulsewp_settings' );
+        $day = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;
+        echo '<input type="number" name="sitepulsewp_settings[backup_day]" value="' . esc_attr( $day ) . '" min="1" max="31" />';
+    }
+
     public function settings_page() {
         echo '<div class="wrap">';
         echo '<h1>SitePulseWP Settings</h1>';
@@ -421,6 +437,8 @@ class SitePulseWP_Admin {
         $files = SitePulseWP_Backup::list_backups();
         echo '<div class="wrap">';
         echo '<h1>Backups</h1>';
+        $backup_now_url = wp_nonce_url( admin_url( 'admin-post.php?action=sitepulsewp_backup_now' ), 'spwp_backup' );
+        echo '<p><a class="button button-primary" href="' . esc_url( $backup_now_url ) . '">Backup Now</a></p>';
         if ( empty( $files ) ) {
             echo '<p>No backups found.</p>';
         } else {
@@ -428,7 +446,9 @@ class SitePulseWP_Admin {
             foreach ( $files as $file ) {
                 $delete_url  = wp_nonce_url( admin_url( 'admin-post.php?action=sitepulsewp_delete_backup&file=' . urlencode( $file ) ), 'spwp_backup' );
                 $restore_url = wp_nonce_url( admin_url( 'admin-post.php?action=sitepulsewp_restore_backup&file=' . urlencode( $file ) ), 'spwp_backup' );
+                $download_url = wp_nonce_url( admin_url( 'admin-post.php?action=sitepulsewp_download_backup&file=' . urlencode( $file ) ), 'spwp_backup' );
                 echo '<tr><td>' . esc_html( $file ) . '</td><td>';
+                echo '<a class="button" href="' . esc_url( $download_url ) . '">Download</a> ';
                 echo '<a class="button" href="' . esc_url( $restore_url ) . '">Restore</a> ';
                 echo '<a class="button" href="' . esc_url( $delete_url ) . '">Delete</a>';
                 echo '</td></tr>';
@@ -455,6 +475,30 @@ class SitePulseWP_Admin {
         $file = isset( $_GET['file'] ) ? sanitize_text_field( wp_unslash( $_GET['file'] ) ) : '';
         SitePulseWP_Backup::restore_backup( $file );
         wp_redirect( admin_url( 'admin.php?page=sitepulsewp-backups' ) );
+        exit;
+    }
+
+    public function backup_now() {
+        if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'spwp_backup' ) ) {
+            wp_die( 'No permission.' );
+        }
+        SitePulseWP_Backup::run_backup( true );
+        wp_redirect( admin_url( 'admin.php?page=sitepulsewp-backups' ) );
+        exit;
+    }
+
+    public function download_backup() {
+        if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'spwp_backup' ) ) {
+            wp_die( 'No permission.' );
+        }
+        $file = isset( $_GET['file'] ) ? sanitize_text_field( wp_unslash( $_GET['file'] ) ) : '';
+        $path = SitePulseWP_Backup::get_backup_path( $file );
+        if ( ! file_exists( $path ) ) {
+            wp_die( 'File not found.' );
+        }
+        header( 'Content-Type: application/zip' );
+        header( 'Content-Disposition: attachment; filename=' . basename( $path ) );
+        readfile( $path );
         exit;
     }
 

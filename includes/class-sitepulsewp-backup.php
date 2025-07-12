@@ -13,6 +13,8 @@ class SitePulseWP_Backup {
     public static function schedule_backup() {
         $options = get_option( 'sitepulsewp_settings' );
         $enabled = isset( $options['backup_enabled'] ) && $options['backup_enabled'];
+        $time    = isset( $options['backup_time'] ) ? $options['backup_time'] : '';
+        $day     = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;
         $time    = isset( $options['backup_time'] ) ? strtotime( $options['backup_time'] ) : false;
 
         if ( ! $enabled || ! $time ) {
@@ -21,27 +23,51 @@ class SitePulseWP_Backup {
         }
 
         $scheduled = wp_next_scheduled( self::CRON_HOOK );
-        $time = self::next_schedule_time( $time );
+        $timestamp = self::next_schedule_time( $day, $time );
 
-        if ( $scheduled && absint( $scheduled ) !== $time ) {
+        if ( $scheduled && absint( $scheduled ) !== $timestamp ) {
             wp_clear_scheduled_hook( self::CRON_HOOK );
             $scheduled = false;
         }
         if ( ! $scheduled ) {
-            wp_schedule_event( $time, 'daily', self::CRON_HOOK );
+            wp_schedule_single_event( $timestamp, self::CRON_HOOK );
         }
     }
 
-    private static function next_schedule_time( $timestamp ) {
-        $day_time = date( 'H:i', $timestamp );
-        $today = strtotime( date( 'Y-m-d' ) . ' ' . $day_time );
-        if ( $today <= time() ) {
-            $today = strtotime( '+1 day', $today );
+    private static function next_schedule_time( $day, $time ) {
+        $time_parts = explode( ':', date( 'H:i', strtotime( $time ) ) );
+        $hour  = intval( $time_parts[0] );
+        $min   = intval( $time_parts[1] );
+        $year  = date( 'Y' );
+        $month = date( 'n' );
+        $day   = intval( $day );
+        $day   = min( $day, cal_days_in_month( CAL_GREGORIAN, $month, $year ) );
+        $next  = mktime( $hour, $min, 0, $month, $day, $year );
+        if ( $next <= time() ) {
+            $month++;
+            if ( $month > 12 ) {
+                $month = 1;
+                $year++;
+            }
+            $day = min( $day, cal_days_in_month( CAL_GREGORIAN, $month, $year ) );
+            $next = mktime( $hour, $min, 0, $month, $day, $year );
         }
-        return $today;
+        return $next;
     }
 
-    public static function run_backup() {
+    public static function run_backup( $force = false ) {
+        $options = get_option( 'sitepulsewp_settings' );
+        $enabled = isset( $options['backup_enabled'] ) && $options['backup_enabled'];
+        $day     = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;
+        if ( ! $force ) {
+            if ( ! $enabled ) {
+                return;
+            }
+            $current_day = min( $day, intval( date( 't' ) ) );
+            if ( intval( date( 'j' ) ) !== $current_day ) {
+                return;
+            }
+        }
         set_time_limit( 0 );
         $upload_dir = wp_upload_dir();
         $backup_dir = trailingslashit( $upload_dir['basedir'] ) . 'sitepulsewp-backups';
@@ -109,6 +135,12 @@ class SitePulseWP_Backup {
         }
         $files = glob( $backup_dir . '/*.zip' );
         return $files ? array_map( 'basename', $files ) : array();
+    }
+
+    public static function get_backup_path( $file ) {
+        $upload_dir = wp_upload_dir();
+        $backup_dir = trailingslashit( $upload_dir['basedir'] ) . 'sitepulsewp-backups';
+        return $backup_dir . '/' . basename( $file );
     }
 
     public static function delete_backup( $file ) {

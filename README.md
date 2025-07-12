@@ -7,3 +7,4 @@ Website Monitoring WordPress plugin
 - 1.0.3 Website monitoring module and bug fix for log details toggle.
 - 1.0.5 Added KPI cards and security monitoring with failed login tracking.
 - 1.0.6 Backup scheduling with restore and delete options.
+- 1.0.7 Monthly backup scheduling with manual backup and download.

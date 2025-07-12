@@ -2,14 +2,14 @@
 /**
  * Plugin Name: SitePulseWP
  * Description: Monitors uptime/downtime, content changes, and plugin/theme logs for your WordPress site.
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Your Name
  * Text Domain: sitepulsewp
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'SITEPULSEWP_VERSION', '1.0.6' );
+define( 'SITEPULSEWP_VERSION', '1.0.7' );
 define( 'SITEPULSEWP_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SITEPULSEWP_URL', plugin_dir_url( __FILE__ ) );
 
