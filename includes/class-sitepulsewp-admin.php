@@ -446,7 +446,11 @@ class SitePulseWP_Admin {
             wp_die( 'No permission.' );
         }
         if ( ! class_exists( 'ZipArchive' ) ) {
-            echo '<div class="notice notice-error"><p>PHP ZipArchive extension is required for backups.</p></div>';
+            if ( class_exists( 'PclZip' ) || file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' ) || class_exists( 'PharData' ) ) {
+                echo '<div class="notice notice-warning"><p>ZipArchive not available. Using fallback compression method.</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>No PHP archive method available. Please enable ZipArchive or Phar.</p></div>';
+            }
         }
         $files = SitePulseWP_Backup::list_backups();
         echo '<div class="wrap">';

@@ -79,18 +79,47 @@ class SitePulseWP_Backup {
         $filename = $domain . '_' . date( 'Ymd-His' ) . '.zip';
         $filepath = trailingslashit( $backup_dir ) . $filename;
 
-        if ( ! class_exists( 'ZipArchive' ) ) {
-            SitePulseWP_Logger::log( 'Backup Failed', 'ZipArchive not available', get_current_user_id() );
-            return;
+                $created = false;
+        $sql     = self::generate_db_dump();
+
+        if ( class_exists( 'ZipArchive' ) ) {
+            $zip = new ZipArchive();
+            if ( $zip->open( $filepath, ZipArchive::CREATE ) === true ) {
+                $zip->addFromString( 'database.sql', $sql );
+                self::zip_dir( ABSPATH, $zip, ABSPATH );
+                $zip->close();
+                $created = true;
+            }
+        } else {
+            if ( ! class_exists( 'PclZip' ) && file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/class-pclzip.php';
+            }
+
+            if ( class_exists( 'PclZip' ) ) {
+                $tmp_sql = trailingslashit( $backup_dir ) . 'database.sql';
+                file_put_contents( $tmp_sql, $sql );
+
+                $archive = new PclZip( $filepath );
+                $archive->create( ABSPATH, PCLZIP_OPT_REMOVE_PATH, ABSPATH );
+                $archive->add( $tmp_sql, PCLZIP_OPT_REMOVE_PATH, dirname( $tmp_sql ) );
+                unlink( $tmp_sql );
+                $created = true;
+            } elseif ( class_exists( 'PharData' ) ) {
+                try {
+                    $phar = new PharData( $filepath, 0, null, Phar::ZIP );
+                    $phar->buildFromDirectory( ABSPATH );
+                    $phar->addFromString( 'database.sql', $sql );
+                    $created = true;
+                } catch ( Exception $e ) {
+                    $created = false;
+                }
+            }
         }
 
-        $zip = new ZipArchive();
-        if ( $zip->open( $filepath, ZipArchive::CREATE ) === true ) {
-            $sql = self::generate_db_dump();
-            $zip->addFromString( 'database.sql', $sql );
-            self::zip_dir( ABSPATH, $zip, ABSPATH );
-            $zip->close();
+        if ( $created ) {
             SitePulseWP_Logger::log( 'Backup Created', $filename, get_current_user_id() );
+        } else {
+            SitePulseWP_Logger::log( 'Backup Failed', 'No archive method available', get_current_user_id() );
         }
     }
 
@@ -166,17 +195,43 @@ class SitePulseWP_Backup {
             return false;
         }
 
-        if ( ! class_exists( 'ZipArchive' ) ) {
-            return false;
+        $sql = '';
+
+        if ( class_exists( 'ZipArchive' ) ) {
+            $zip = new ZipArchive();
+            if ( $zip->open( $path ) !== true ) {
+                return false;
+            }
+            $sql = $zip->getFromName( 'database.sql' );
+            $zip->extractTo( ABSPATH );
+            $zip->close();
+        } else {
+            if ( ! class_exists( 'PclZip' ) && file_exists( ABSPATH . 'wp-admin/includes/class-pclzip.php' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/class-pclzip.php';
+            }
+
+            if ( class_exists( 'PclZip' ) ) {
+                $archive = new PclZip( $path );
+                $archive->extract( PCLZIP_OPT_PATH, ABSPATH, PCLZIP_OPT_REPLACE_NEWER );
+                $content = $archive->extract( PCLZIP_OPT_BY_NAME, 'database.sql', PCLZIP_OPT_EXTRACT_AS_STRING );
+                if ( is_array( $content ) && isset( $content[0]['content'] ) ) {
+                    $sql = $content[0]['content'];
+                }
+            } elseif ( class_exists( 'PharData' ) ) {
+                try {
+                    $phar = new PharData( $path );
+                    $phar->extractTo( ABSPATH, null, true );
+                    if ( isset( $phar['database.sql'] ) ) {
+                        $sql = $phar['database.sql']->getContent();
+                    }
+                } catch ( Exception $e ) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
         }
         
-        $zip = new ZipArchive();
-        if ( $zip->open( $path ) !== true ) {
-            return false;
-        }
-        $sql = $zip->getFromName( 'database.sql' );
-        $zip->extractTo( ABSPATH );
-        $zip->close();
         if ( $sql ) {
             self::import_db_dump( $sql );
         }
