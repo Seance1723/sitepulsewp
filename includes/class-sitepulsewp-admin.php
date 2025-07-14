@@ -21,6 +21,7 @@ class SitePulseWP_Admin {
         add_action( 'admin_post_sitepulsewp_restore_backup', array( $this, 'restore_backup' ) );
         add_action( 'admin_post_sitepulsewp_backup_now', array( $this, 'backup_now' ) );
         add_action( 'admin_post_sitepulsewp_download_backup', array( $this, 'download_backup' ) );
+        add_action( 'wp_ajax_sitepulsewp_backup_now', array( $this, 'backup_now_ajax' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
     }
@@ -84,6 +85,9 @@ class SitePulseWP_Admin {
 
         if ( false !== strpos( $hook, 'sitepulsewp-dashboard' ) ) {
             wp_enqueue_script( 'chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', array(), null );
+        }
+        if ( false !== strpos( $hook, 'sitepulsewp-backups' ) ) {
+            wp_enqueue_script( 'jquery' );
         }
     }
 
@@ -455,8 +459,10 @@ class SitePulseWP_Admin {
         $files = SitePulseWP_Backup::list_backups();
         echo '<div class="wrap">';
         echo '<h1>Backups</h1>';
-        $backup_now_url = wp_nonce_url( admin_url( 'admin-post.php?action=sitepulsewp_backup_now' ), 'spwp_backup' );
-        echo '<p><a class="button button-primary" href="' . esc_url( $backup_now_url ) . '">Backup Now</a></p>';
+        $nonce = wp_create_nonce( 'spwp_backup' );
+        echo '<p><button id="spwp-backup-btn" class="button button-primary" data-nonce="' . esc_attr( $nonce ) . '">Backup Now</button></p>';
+        echo '<div id="spwp-backup-progress" style="display:none;width:100%;background:#eee;height:20px;margin-bottom:10px"><div id="spwp-backup-bar" style="background:#0073aa;height:100%;width:0"></div></div>';
+        echo '<div id="spwp-backup-log"></div>';
         if ( empty( $files ) ) {
             echo '<p>No backups found.</p>';
         } else {
@@ -474,6 +480,7 @@ class SitePulseWP_Admin {
             echo '</tbody></table>';
         }
         echo '</div>';
+        echo '<script type="text/javascript">jQuery(function($){$("#spwp-backup-btn").on("click",function(e){e.preventDefault();var b=$(this);b.prop("disabled",true);$("#spwp-backup-progress").show();$("#spwp-backup-bar").css("width","30%");$("#spwp-backup-log").text("Running backup...");$.post(ajaxurl,{action:"sitepulsewp_backup_now",nonce:b.data("nonce")},function(r){if(r.success){$("#spwp-backup-bar").css("width","100%");$("#spwp-backup-log").text(r.data.message);setTimeout(function(){location.reload();},1000);}else{$("#spwp-backup-bar").css({width:"100%",background:"#dc3232"});$("#spwp-backup-log").text(r.data.message);b.prop("disabled",false);}}).fail(function(){$("#spwp-backup-bar").css({width:"100%",background:"#dc3232"});$("#spwp-backup-log").text("Backup failed.");b.prop("disabled",false);});});});</script>';
     }
 
     public function delete_backup() {
@@ -504,6 +511,25 @@ class SitePulseWP_Admin {
         wp_redirect( admin_url( 'admin.php?page=sitepulsewp-backups' ) );
         exit;
     }
+
+    public function backup_now_ajax() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'No permission.' ) );
+        }
+        check_ajax_referer( 'spwp_backup', 'nonce' );
+
+        $before = SitePulseWP_Backup::list_backups();
+        SitePulseWP_Backup::run_backup( true );
+        $after = SitePulseWP_Backup::list_backups();
+        $new   = array_values( array_diff( $after, $before ) );
+
+        if ( ! empty( $new ) ) {
+            wp_send_json_success( array( 'message' => 'Backup created: ' . $new[0] ) );
+        } else {
+            wp_send_json_error( array( 'message' => 'Backup failed.' ) );
+        }
+    }
+
 
     public function download_backup() {
         if ( ! current_user_can( 'manage_options' ) || ! check_admin_referer( 'spwp_backup' ) ) {
