@@ -463,6 +463,18 @@ class SitePulseWP_Admin {
         echo '<p><button id="spwp-backup-btn" class="button button-primary" data-nonce="' . esc_attr( $nonce ) . '">Backup Now</button></p>';
         echo '<div id="spwp-backup-progress" style="display:none;width:100%;background:#eee;height:20px;margin-bottom:10px"><div id="spwp-backup-bar" style="background:#0073aa;height:100%;width:0"></div></div>';
         echo '<div id="spwp-backup-log"></div>';
+        echo '<div id="spwp-backup-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:100000;align-items:center;justify-content:center;">';
+        echo '<div style="background:#fff;padding:20px;width: 320px;max-width:400px;position: absolute;left: 50%;top: 20vh;">';
+        echo '<h2>Select Backup Options</h2>';
+        echo '<label><input type="checkbox" value="theme" class="spwp-bk-opt"> Active Theme</label><br />';
+        echo '<label><input type="checkbox" value="uploads" class="spwp-bk-opt"> Uploads Folder</label><br />';
+        echo '<label><input type="checkbox" value="plugins" class="spwp-bk-opt"> Plugins Folder</label><br />';
+        echo '<label><input type="checkbox" value="others" class="spwp-bk-opt"> Others (.htaccess and misc)</label><br />';
+        echo '<label><input type="checkbox" value="db" class="spwp-bk-opt"> Database</label><br />';
+        echo '<label><input type="checkbox" value="complete" id="spwp-bk-complete" class="spwp-bk-opt"> Complete Backup</label><br /><br />';
+        echo '<button id="spwp-start-backup" class="button button-primary" data-nonce="' . esc_attr( $nonce ) . '">Start</button> ';
+        echo '<button id="spwp-cancel-backup" class="button">Cancel</button>';
+        echo '</div></div>';
         if ( empty( $files ) ) {
             echo '<p>No backups found.</p>';
         } else {
@@ -480,7 +492,7 @@ class SitePulseWP_Admin {
             echo '</tbody></table>';
         }
         echo '</div>';
-        echo '<script type="text/javascript">jQuery(function($){$("#spwp-backup-btn").on("click",function(e){e.preventDefault();var b=$(this);b.prop("disabled",true);$("#spwp-backup-progress").show();$("#spwp-backup-bar").css("width","30%");$("#spwp-backup-log").text("Running backup...");$.post(ajaxurl,{action:"sitepulsewp_backup_now",nonce:b.data("nonce")},function(r){if(r.success){$("#spwp-backup-bar").css("width","100%");$("#spwp-backup-log").text(r.data.message);setTimeout(function(){location.reload();},1000);}else{$("#spwp-backup-bar").css({width:"100%",background:"#dc3232"});$("#spwp-backup-log").text(r.data.message);b.prop("disabled",false);}}).fail(function(){$("#spwp-backup-bar").css({width:"100%",background:"#dc3232"});$("#spwp-backup-log").text("Backup failed.");b.prop("disabled",false);});});});</script>';
+        echo '<script type="text/javascript">jQuery(function($){var m=$("#spwp-backup-modal");$("#spwp-backup-btn").on("click",function(e){e.preventDefault();m.show();});$("#spwp-cancel-backup").on("click",function(e){e.preventDefault();m.hide();});$("#spwp-bk-complete").on("change",function(){var c=$(this).is(":checked");m.find("input.spwp-bk-opt").not(this).prop("disabled",c);});function doBackup(parts,nonce,btn){btn.prop("disabled",true);m.hide();$("#spwp-backup-progress").show();$("#spwp-backup-bar").css("width","30%");$("#spwp-backup-log").text("Running backup...");$.post(ajaxurl,{action:"sitepulsewp_backup_now",nonce:nonce,parts:parts},function(r){if(r.success){$("#spwp-backup-bar").css("width","100%");$("#spwp-backup-log").text(r.data.message);setTimeout(function(){location.reload();},1000);}else{$("#spwp-backup-bar").css({width:"100%",background:"#dc3232"});$("#spwp-backup-log").text(r.data.message);btn.prop("disabled",false);}}).fail(function(){$("#spwp-backup-bar").css({width:"100%",background:"#dc3232"});$("#spwp-backup-log").text("Backup failed.");btn.prop("disabled",false);});}$("#spwp-start-backup").on("click",function(e){e.preventDefault();var btn=$(this),nonce=btn.data("nonce"),parts=[];m.find("input.spwp-bk-opt:checked").each(function(){parts.push($(this).val());});if($.inArray("complete",parts)!==-1){parts=["complete"];}doBackup(parts,nonce,btn);});});</script>';
     }
 
     public function delete_backup() {
@@ -518,8 +530,9 @@ class SitePulseWP_Admin {
         }
         check_ajax_referer( 'spwp_backup', 'nonce' );
 
+        $parts  = isset( $_POST['parts'] ) ? array_map( 'sanitize_text_field', (array) $_POST['parts'] ) : array();
         $before = SitePulseWP_Backup::list_backups();
-        SitePulseWP_Backup::run_backup( true );
+        SitePulseWP_Backup::run_backup( true, $parts );
         $after = SitePulseWP_Backup::list_backups();
         $new   = array_values( array_diff( $after, $before ) );
 

@@ -55,10 +55,10 @@ class SitePulseWP_Backup {
         return $next;
     }
 
-    public static function run_backup( $force = false ) {
-        $options = get_option( 'sitepulsewp_settings' );
-        $enabled = isset( $options['backup_enabled'] ) && $options['backup_enabled'];
-        $day     = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;
+    public static function run_backup( $force = false, $parts = array() ) {
+        $settings = get_option( 'sitepulsewp_settings' );
+        $enabled  = isset( $settings['backup_enabled'] ) && $settings['backup_enabled'];
+        $day      = isset( $settings['backup_day'] ) ? intval( $settings['backup_day'] ) : 1;
         if ( ! $force ) {
             if ( ! $enabled ) {
                 return;
@@ -79,14 +79,68 @@ class SitePulseWP_Backup {
         $filename = $domain . '_' . date( 'Ymd-His' ) . '.zip';
         $filepath = trailingslashit( $backup_dir ) . $filename;
 
-                $created = false;
-        $sql     = self::generate_db_dump();
+        $defaults = array(
+            'theme'    => false,
+            'uploads'  => false,
+            'plugins'  => false,
+            'others'   => false,
+            'db'       => false,
+            'complete' => false,
+        );
+        $parts = wp_parse_args( $parts, $defaults );
+        if ( empty( array_filter( $parts ) ) ) {
+            $parts['complete'] = true;
+        }
+        if ( $parts['complete'] ) {
+            $parts = array_merge( $defaults, array( 'complete' => true, 'db' => true ) );
+        }
+
+        $created = false;
+        $sql     = ( $parts['db'] || $parts['complete'] ) ? self::generate_db_dump() : '';
+        $paths   = array();
+
+        if ( $parts['complete'] ) {
+            $paths[] = ABSPATH;
+        } else {
+            if ( $parts['theme'] ) {
+                $theme = wp_get_theme();
+                if ( $theme && $theme->exists() ) {
+                    $paths[] = get_stylesheet_directory();
+                }
+            }
+            if ( $parts['uploads'] ) {
+                $paths[] = WP_CONTENT_DIR . '/uploads';
+            }
+            if ( $parts['plugins'] ) {
+                $paths[] = WP_PLUGIN_DIR;
+            }
+            if ( $parts['others'] ) {
+                if ( file_exists( ABSPATH . '.htaccess' ) ) {
+                    $paths[] = ABSPATH . '.htaccess';
+                }
+                foreach ( glob( ABSPATH . '*', GLOB_NOSORT ) as $p ) {
+                    $base = basename( $p );
+                    if ( in_array( $base, array( 'wp-admin', 'wp-includes', 'wp-content' ) ) ) {
+                        continue;
+                    }
+                    $paths[] = $p;
+                }
+            }
+        }
 
         if ( class_exists( 'ZipArchive' ) ) {
             $zip = new ZipArchive();
             if ( $zip->open( $filepath, ZipArchive::CREATE ) === true ) {
-                $zip->addFromString( 'database.sql', $sql );
-                self::zip_dir( ABSPATH, $zip, ABSPATH );
+                if ( $sql ) {
+                    $zip->addFromString( 'database.sql', $sql );
+                }
+                foreach ( $paths as $p ) {
+                    if ( is_dir( $p ) ) {
+                        self::zip_dir( $p, $zip, ABSPATH );
+                    } else {
+                        $zip->addFile( $p, ltrim( str_replace( ABSPATH, '', $p ), '/' ) );
+                    }
+                }
                 $zip->close();
                 $created = true;
             }
@@ -96,19 +150,32 @@ class SitePulseWP_Backup {
             }
 
             if ( class_exists( 'PclZip' ) ) {
-                $tmp_sql = trailingslashit( $backup_dir ) . 'database.sql';
-                file_put_contents( $tmp_sql, $sql );
+                $tmp_sql = '';
+                if ( $sql ) {
+                    $tmp_sql = trailingslashit( $backup_dir ) . 'database.sql';
+                    file_put_contents( $tmp_sql, $sql );
+                    $paths[] = $tmp_sql;
+                }
 
                 $archive = new PclZip( $filepath );
-                $archive->create( ABSPATH, PCLZIP_OPT_REMOVE_PATH, ABSPATH );
-                $archive->add( $tmp_sql, PCLZIP_OPT_REMOVE_PATH, dirname( $tmp_sql ) );
-                unlink( $tmp_sql );
+                $archive->create( $paths, PCLZIP_OPT_REMOVE_PATH, ABSPATH );
+                if ( $tmp_sql ) {
+                    unlink( $tmp_sql );
+                }
                 $created = true;
             } elseif ( class_exists( 'PharData' ) ) {
                 try {
                     $phar = new PharData( $filepath, 0, null, Phar::ZIP );
-                    $phar->buildFromDirectory( ABSPATH );
-                    $phar->addFromString( 'database.sql', $sql );
+                    foreach ( $paths as $p ) {
+                        if ( is_dir( $p ) ) {
+                            $phar->buildFromIterator( new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $p, FilesystemIterator::SKIP_DOTS ) ), ABSPATH );
+                        } else {
+                            $phar->addFile( $p, ltrim( str_replace( ABSPATH, '', $p ), '/' ) );
+                        }
+                    }
+                    if ( $sql ) {
+                        $phar->addFromString( 'database.sql', $sql );
+                    }
                     $created = true;
                 } catch ( Exception $e ) {
                     $created = false;
