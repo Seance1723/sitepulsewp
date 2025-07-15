@@ -99,10 +99,10 @@ class SitePulseWP_Backup {
             self::create_archive( array( ABSPATH ), $sql, trailingslashit( $backup_dir ) . $filename );
         } else {
             if ( $parts['theme'] ) {
-                $theme = wp_get_theme();
-                if ( $theme && $theme->exists() ) {
+                $theme_dir = WP_CONTENT_DIR . '/themes';
+                if ( file_exists( $theme_dir ) ) {
                     $filename = 'SPBKP_Theme_' . $timestamp . '.zip';
-                    self::create_archive( array( get_stylesheet_directory() ), '', trailingslashit( $backup_dir ) . $filename );
+                    self::create_archive( array( $theme_dir ), '', trailingslashit( $backup_dir ) . $filename );
                 }
             }
             if ( $parts['uploads'] ) {
@@ -120,7 +120,23 @@ class SitePulseWP_Backup {
                 }
                 foreach ( glob( ABSPATH . '*', GLOB_NOSORT ) as $p ) {
                     $base = basename( $p );
-                    if ( in_array( $base, array( 'wp-admin', 'wp-includes', 'wp-content' ) ) ) {
+                    if ( in_array( $base, array( 'wp-admin', 'wp-includes' ) ) ) {
+                        continue;
+                    }
+                    if ( $base === 'wp-content' && is_dir( $p ) ) {
+                        foreach ( glob( $p . '/*', GLOB_NOSORT ) as $sub ) {
+                            $subbase = basename( $sub );
+                            if ( in_array( $subbase, array( 'plugins', 'themes', 'uploads' ) ) ) {
+                                continue;
+                            }
+                            $paths[] = $sub;
+                        }
+                        continue;
+                    }
+                    if ( preg_match( '/^wp-.*\.php$/', $base ) && 'wp-config.php' !== $base ) {
+                        continue;
+                    }
+                    if ( in_array( $base, array( 'index.php', 'xmlrpc.php', 'readme.html', 'license.txt' ) ) ) {
                         continue;
                     }
                     $paths[] = $p;
