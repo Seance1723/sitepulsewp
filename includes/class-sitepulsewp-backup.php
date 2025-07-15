@@ -15,7 +15,6 @@ class SitePulseWP_Backup {
         $enabled = isset( $options['backup_enabled'] ) && $options['backup_enabled'];
         $time    = isset( $options['backup_time'] ) ? $options['backup_time'] : '';
         $day     = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;
-        $time    = isset( $options['backup_time'] ) ? strtotime( $options['backup_time'] ) : false;
 
         if ( ! $enabled || ! $time ) {
             wp_clear_scheduled_hook( self::CRON_HOOK );
