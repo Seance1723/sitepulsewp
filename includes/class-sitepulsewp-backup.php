@@ -14,7 +14,7 @@ class SitePulseWP_Backup {
         $options = get_option( 'sitepulsewp_settings' );
         $enabled = isset( $options['backup_enabled'] ) && $options['backup_enabled'];
         $time    = isset( $options['backup_time'] ) ? $options['backup_time'] : '';
-        $day     = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;
+        $day     = isset( $options['backup_day'] ) ? intval( $options['backup_day'] ) : 1;          
 
         if ( ! $enabled || ! $time ) {
             wp_clear_scheduled_hook( self::CRON_HOOK );
@@ -67,16 +67,13 @@ class SitePulseWP_Backup {
                 return;
             }
         }
+
         set_time_limit( 0 );
         $upload_dir = wp_upload_dir();
         $backup_dir = trailingslashit( $upload_dir['basedir'] ) . 'sitepulsewp-backups';
         if ( ! file_exists( $backup_dir ) ) {
             wp_mkdir_p( $backup_dir );
         }
-
-        $domain   = parse_url( home_url(), PHP_URL_HOST );
-        $filename = $domain . '_' . date( 'Ymd-His' ) . '.zip';
-        $filepath = trailingslashit( $backup_dir ) . $filename;
 
         $defaults = array(
             'theme'    => false,
@@ -94,26 +91,30 @@ class SitePulseWP_Backup {
             $parts = array_merge( $defaults, array( 'complete' => true, 'db' => true ) );
         }
 
-        $created = false;
-        $sql     = ( $parts['db'] || $parts['complete'] ) ? self::generate_db_dump() : '';
-        $paths   = array();
+        $timestamp = date( 'Ymd-His' );
 
         if ( $parts['complete'] ) {
-            $paths[] = ABSPATH;
+            $filename = 'SPBKP_Complete_' . $timestamp . '.zip';
+            $sql      = self::generate_db_dump();
+            self::create_archive( array( ABSPATH ), $sql, trailingslashit( $backup_dir ) . $filename );
         } else {
             if ( $parts['theme'] ) {
                 $theme = wp_get_theme();
                 if ( $theme && $theme->exists() ) {
-                    $paths[] = get_stylesheet_directory();
+                    $filename = 'SPBKP_Theme_' . $timestamp . '.zip';
+                    self::create_archive( array( get_stylesheet_directory() ), '', trailingslashit( $backup_dir ) . $filename );
                 }
             }
             if ( $parts['uploads'] ) {
-                $paths[] = WP_CONTENT_DIR . '/uploads';
+                $filename = 'SPBKP_Uploads_' . $timestamp . '.zip';
+                self::create_archive( array( WP_CONTENT_DIR . '/uploads' ), '', trailingslashit( $backup_dir ) . $filename );
             }
             if ( $parts['plugins'] ) {
-                $paths[] = WP_PLUGIN_DIR;
+                $filename = 'SPBKP_Plugin_' . $timestamp . '.zip';
+                self::create_archive( array( WP_PLUGIN_DIR ), '', trailingslashit( $backup_dir ) . $filename );
             }
             if ( $parts['others'] ) {
+                $paths = array();
                 if ( file_exists( ABSPATH . '.htaccess' ) ) {
                     $paths[] = ABSPATH . '.htaccess';
                 }
@@ -124,8 +125,19 @@ class SitePulseWP_Backup {
                     }
                     $paths[] = $p;
                 }
+                $filename = 'SPBKP_Others_' . $timestamp . '.zip';
+                self::create_archive( $paths, '', trailingslashit( $backup_dir ) . $filename );
+            }
+            if ( $parts['db'] ) {
+                $filename = 'SPBKP_DB_' . $timestamp . '.zip';
+                self::create_archive( array(), self::generate_db_dump(), trailingslashit( $backup_dir ) . $filename );
             }
         }
+    }
+
+    private static function create_archive( $paths, $sql, $filepath ) {
+        $created  = false;
+        $backup_dir = dirname( $filepath );
 
         if ( class_exists( 'ZipArchive' ) ) {
             $zip = new ZipArchive();
@@ -150,14 +162,15 @@ class SitePulseWP_Backup {
 
             if ( class_exists( 'PclZip' ) ) {
                 $tmp_sql = '';
+                $p_paths = $paths;
                 if ( $sql ) {
                     $tmp_sql = trailingslashit( $backup_dir ) . 'database.sql';
                     file_put_contents( $tmp_sql, $sql );
-                    $paths[] = $tmp_sql;
+                    $p_paths[] = $tmp_sql;
                 }
 
                 $archive = new PclZip( $filepath );
-                $archive->create( $paths, PCLZIP_OPT_REMOVE_PATH, ABSPATH );
+                $archive->create( $p_paths, PCLZIP_OPT_REMOVE_PATH, ABSPATH );
                 if ( $tmp_sql ) {
                     unlink( $tmp_sql );
                 }
@@ -182,11 +195,14 @@ class SitePulseWP_Backup {
             }
         }
 
+        $file = basename( $filepath );
         if ( $created ) {
-            SitePulseWP_Logger::log( 'Backup Created', $filename, get_current_user_id() );
+            SitePulseWP_Logger::log( 'Backup Created', $file, get_current_user_id() );
         } else {
             SitePulseWP_Logger::log( 'Backup Failed', 'No archive method available', get_current_user_id() );
         }
+
+        return $created;
     }
 
     private static function generate_db_dump() {

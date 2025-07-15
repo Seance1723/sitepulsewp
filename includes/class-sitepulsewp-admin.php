@@ -541,7 +541,7 @@ class SitePulseWP_Admin {
         $new   = array_values( array_diff( $after, $before ) );
 
         if ( ! empty( $new ) ) {
-            wp_send_json_success( array( 'message' => 'Backup created: ' . $new[0] ) );
+            wp_send_json_success( array( 'message' => 'Backup created: ' . implode( ', ', $new ) ) );
         } else {
             wp_send_json_error( array( 'message' => 'Backup failed.' ) );
         }
