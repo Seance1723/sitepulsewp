@@ -530,7 +530,11 @@ class SitePulseWP_Admin {
         }
         check_ajax_referer( 'spwp_backup', 'nonce' );
 
-        $parts  = isset( $_POST['parts'] ) ? array_map( 'sanitize_text_field', (array) $_POST['parts'] ) : array();
+        $selected = isset( $_POST['parts'] ) ? array_map( 'sanitize_text_field', (array) $_POST['parts'] ) : array();
+        $parts    = array();
+        foreach ( array( 'theme', 'uploads', 'plugins', 'others', 'db', 'complete' ) as $key ) {
+            $parts[ $key ] = in_array( $key, $selected, true );
+        }
         $before = SitePulseWP_Backup::list_backups();
         SitePulseWP_Backup::run_backup( true, $parts );
         $after = SitePulseWP_Backup::list_backups();
